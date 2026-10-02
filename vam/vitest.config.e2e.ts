@@ -8,6 +8,10 @@ export default defineConfig({
     root: './',
     include: ['**/*.e2e-spec.ts'],
     // A fresh database per app instance.
-    env: { DB_STORAGE: ':memory:' },
+    env: {
+      DB_STORAGE: ':memory:',
+      // Lets the chat module start; tests replace the language model.
+      OPENAI_API_KEY: 'sk-test-not-used',
+    },
   },
 });

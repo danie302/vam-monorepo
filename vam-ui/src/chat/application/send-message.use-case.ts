@@ -1,16 +1,24 @@
 import { EmptyMessageError, MessageTooLongError } from '../domain/chat.errors.ts';
-import { createMessage, MESSAGE_MAX_LENGTH, type Message } from '../domain/message.ts';
+import { MESSAGE_MAX_LENGTH } from '../domain/message.ts';
 import { Assistant } from './ports/assistant.ts';
 
-/** Checks the user's message and returns the assistant's answer. */
+export interface SendMessageOptions {
+  model?: string;
+  signal?: AbortSignal;
+}
+
+/** Checks the user's message and streams the assistant's answer. */
 export class SendMessageUseCase {
   constructor(private readonly assistant: Assistant) {}
 
-  /** Throws `EmptyMessageError` or `MessageTooLongError`. */
-  async execute(content: string): Promise<Message> {
-    const text = content.trim();
-    if (!text) throw new EmptyMessageError();
-    if (text.length > MESSAGE_MAX_LENGTH) throw new MessageTooLongError();
-    return createMessage('assistant', await this.assistant.reply(text));
+  /**
+   * Throws `EmptyMessageError` or `MessageTooLongError` right away, before
+   * anything is sent; then returns the answer chunk by chunk.
+   */
+  execute(content: string, { model, signal }: SendMessageOptions = {}): AsyncIterable<string> {
+    const message = content.trim();
+    if (!message) throw new EmptyMessageError();
+    if (message.length > MESSAGE_MAX_LENGTH) throw new MessageTooLongError();
+    return this.assistant.stream({ message, model, signal });
   }
 }

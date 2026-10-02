@@ -7,5 +7,5 @@ import { container } from '../../container.ts';
 /** Home: the chat with the assistant. */
 export default function ChatPage() {
   const { user } = useAuth();
-  return <ChatView sendMessage={container.chat.sendMessage} userName={user?.name} />;
+  return <ChatView useCases={container.chat} userName={user?.name} />;
 }

@@ -2,11 +2,16 @@ import { createAuthModule } from './auth/auth.module.ts';
 import type { AuthRepository } from './auth/domain/auth.repository.ts';
 import { HttpAuthRepository } from './auth/infrastructure/http/http-auth.repository.ts';
 import { InMemoryAuthRepository } from './auth/infrastructure/in-memory/in-memory-auth.repository.ts';
+import type { Assistant } from './chat/application/ports/assistant.ts';
 import { createChatModule } from './chat/chat.module.ts';
+import { HttpAssistant } from './chat/infrastructure/http/http-assistant.ts';
 import { PlaceholderAssistant } from './chat/infrastructure/placeholder/placeholder-assistant.ts';
 import { ApiClient } from './shared/infrastructure/http/api-client.ts';
 
-/** Composition root: the only place that picks adapters. */
+/**
+ * Composition root: the only place that picks adapters. `NEXT_PUBLIC_*`
+ * variables are read as literals: Next inlines them at build time.
+ */
 const api = new ApiClient(
   process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000',
 );
@@ -14,7 +19,7 @@ const api = new ApiClient(
 /**
  * `NEXT_PUBLIC_AUTH_ADAPTER`: `http` (default) talks to the API, `memory`
  * keeps accounts in the browser tab (lost on reload) to work on the UI
- * without the backend. Read as a literal: Next inlines it at build time.
+ * without the backend.
  */
 function authRepository(): AuthRepository {
   const adapter = process.env.NEXT_PUBLIC_AUTH_ADAPTER ?? 'http';
@@ -30,10 +35,27 @@ function authRepository(): AuthRepository {
   }
 }
 
+/**
+ * `NEXT_PUBLIC_CHAT_ADAPTER`: `http` (default) streams answers from the
+ * API's LLM, `placeholder` streams a canned answer (no API or OpenAI key).
+ */
+function assistant(): Assistant {
+  const adapter = process.env.NEXT_PUBLIC_CHAT_ADAPTER ?? 'http';
+  switch (adapter) {
+    case 'http':
+      return new HttpAssistant(api);
+    case 'placeholder':
+      return new PlaceholderAssistant();
+    default:
+      throw new Error(
+        `Unknown NEXT_PUBLIC_CHAT_ADAPTER "${adapter}": use "http" or "placeholder"`,
+      );
+  }
+}
+
 export const container = {
   auth: createAuthModule(authRepository()),
-  // No LLM endpoint in the API yet: swap for an HTTP adapter once there is.
-  chat: createChatModule(new PlaceholderAssistant()),
+  chat: createChatModule(assistant()),
 };
 
 export type Container = typeof container;

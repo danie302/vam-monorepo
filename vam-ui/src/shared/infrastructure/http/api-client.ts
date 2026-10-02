@@ -1,3 +1,5 @@
+import { readServerSentEvents, type ServerSentEvent } from './server-sent-events.ts';
+
 /** The API answered with an error status. */
 export class ApiError extends Error {
   constructor(
@@ -32,11 +34,38 @@ export class ApiClient {
     return this.request<T>('POST', path, body);
   }
 
+  /**
+   * POSTs `body` and reads the answer as Server-Sent Events. An error status
+   * throws before the first event; aborting `signal` stops the stream (the
+   * read throws an `AbortError`).
+   */
+  async *stream(
+    path: string,
+    body: unknown,
+    signal?: AbortSignal,
+  ): AsyncGenerator<ServerSentEvent> {
+    const response = await this.send('POST', path, body, signal);
+    if (!response.body) return;
+    yield* readServerSentEvents(response.body);
+  }
+
   private async request<T>(
     method: string,
     path: string,
     body?: unknown,
   ): Promise<T> {
+    const response = await this.send(method, path, body);
+    if (response.status === 204) return undefined as T;
+    return (await response.json()) as T;
+  }
+
+  /** Sends the request; throws `NetworkError` or `ApiError` unless it is a 2xx. */
+  private async send(
+    method: string,
+    path: string,
+    body?: unknown,
+    signal?: AbortSignal,
+  ): Promise<Response> {
     let response: Response;
     try {
       response = await fetch(`${this.baseUrl}${path}`, {
@@ -44,16 +73,17 @@ export class ApiClient {
         credentials: 'include',
         headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
         body: body === undefined ? undefined : JSON.stringify(body),
+        signal,
       });
-    } catch {
+    } catch (error) {
+      if (signal?.aborted) throw error;
       throw new NetworkError();
     }
 
     if (!response.ok) {
       throw new ApiError(response.status, await errorMessage(response));
     }
-    if (response.status === 204) return undefined as T;
-    return (await response.json()) as T;
+    return response;
   }
 }
 

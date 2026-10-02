@@ -13,3 +13,11 @@ export class MessageTooLongError extends Error {
     this.name = 'MessageTooLongError';
   }
 }
+
+/** The assistant could not answer; the message is safe to show. */
+export class AssistantUnavailableError extends Error {
+  constructor(message = 'The assistant is not available right now') {
+    super(message);
+    this.name = 'AssistantUnavailableError';
+  }
+}

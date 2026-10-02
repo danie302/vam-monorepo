@@ -2,6 +2,7 @@ import { Module, StandardSchemaValidationPipe } from '@nestjs/common';
 import { APP_PIPE } from '@nestjs/core';
 import { AuthenticationModule } from '@nestjs/authentication';
 import { AuthModule } from './auth/auth.module.ts';
+import { ChatModule } from './chat/chat.module.ts';
 import { trustedOrigins } from './config/origins.config.ts';
 import { DatabaseModule } from './database/database.module.ts';
 
@@ -17,6 +18,7 @@ import { DatabaseModule } from './database/database.module.ts';
       allowInMemoryStorage: true,
     }),
     AuthModule,
+    ChatModule,
   ],
   controllers: [],
   providers: [

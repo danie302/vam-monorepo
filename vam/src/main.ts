@@ -1,3 +1,5 @@
+// First: loads .env before any config file reads process.env.
+import './config/load-env.ts';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.ts';
 import { trustedOrigins } from './config/origins.config.ts';

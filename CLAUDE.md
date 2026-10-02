@@ -13,13 +13,13 @@ full roadmap of planned additions.
 ## Current status
 
 - `vam/` — NestJS backend. Cookie-session authentication (sign up / sign in /
-  sign out / me) is implemented with `@nestjs/authentication`, `@nestjs/sequelize`
-  and SQLite. No LLM chat yet.
+  sign out / me) with `@nestjs/authentication`, `@nestjs/sequelize` and
+  SQLite, and an LLM chat on OpenAI streamed as Server-Sent Events
+  (`POST /chat/messages`, `GET /chat/models`). One message in, one answer
+  out: no conversation memory yet.
 - `vam-ui/` — Next.js 16 + Material UI frontend. Sign-in / sign-up pages
-  against the backend's cookie session, and the chat UI at `/`. The chat
-  answers with `PlaceholderAssistant` (no LLM endpoint in the API yet):
-  replace it in `src/container.ts` with an HTTP adapter of the `Assistant`
-  port once the endpoint exists.
+  against the backend's cookie session, and the chat UI at `/`: streamed
+  answers, stop button, model picker.
 
 ## Stack
 
@@ -93,6 +93,20 @@ Backend notes:
 - `allowInMemoryStorage: true`: the `mfa` and `refreshTokens` auth stores are
   in memory (fine while MFA and tokens are unused). Implement them before
   enabling either feature.
+- Env: `vam/.env` is loaded at startup by `src/config/load-env.ts` (Node's
+  `process.loadEnvFile`, first import of `main.ts`); real env vars win. See
+  `vam/.env.example`.
+- Chat: `OPENAI_API_KEY` is required — the app fails at startup without it.
+  `CHAT_MODELS` (comma separated, first is the default) is the allowlist for
+  the `model` field of `POST /chat/messages`; anything else is a 400.
+  `OPENAI_BASE_URL` (read by the SDK) points it at another server, e.g. a
+  local mock. Responses API with `store: false`.
+- SSE: `POST /chat/messages` uses `@Sse(path, { method: POST })` and emits
+  `delta {text}`, then `done {}` or `error {message}` (safe to show; details
+  are logged). Errors before the stream starts (validation, unknown model)
+  are normal HTTP errors. `@SseSignal()` aborts the OpenAI request when the
+  client disconnects. E2E tests replace `LanguageModel` with
+  `FakeLanguageModel`.
 - `WEB_ORIGINS` (comma separated) enables CORS with credentials and lets
   those origins use the session cookie. Unset, it defaults to the frontend
   dev server (`http://localhost:3001`), and to nothing when
@@ -105,6 +119,8 @@ Frontend commands (run in `vam-ui/`):
 - `npm run lint` — eslint; `npm test` — vitest (`src/**/*.spec.ts`)
 - `NEXT_PUBLIC_API_URL` — API base URL (default `http://localhost:3000`,
   see `.env.example`)
+- `NEXT_PUBLIC_CHAT_ADAPTER` — `http` (default, streams from the API) or
+  `placeholder` (canned streamed answer; no API or OpenAI key needed)
 - `NEXT_PUBLIC_AUTH_ADAPTER` — `http` (default, the API) or `memory` (accounts
   in the browser tab, lost on reload; no backend needed). Read in
   `src/container.ts`; `NEXT_PUBLIC_*` vars are inlined at build time, so
@@ -126,6 +142,8 @@ src/app/           Next routes only: (auth)/ guest pages, (app)/ signed-in pages
 
 - Dependency rule: `domain/` and `application/` never import `react`,
   `next` or `@mui/*`.
+- Streaming: `ApiClient.stream()` POSTs and reads the body with
+  `readServerSentEvents` (`EventSource` only does GET).
 - The browser calls the API directly with `credentials: 'include'`; route
   protection is client-side (`RequireAuth` / `RequireGuest` in layouts).
 - Material UI v9: no system props on components (`fontWeight={700}`), use `sx`.
