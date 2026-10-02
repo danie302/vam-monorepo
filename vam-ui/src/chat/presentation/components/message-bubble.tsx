@@ -4,10 +4,14 @@ import type { ReactNode } from 'react';
 import { VamMark } from '../../../shared/presentation/components/vam-logo.tsx';
 import { brand } from '../../../shared/presentation/theme/brand.ts';
 import type { Message } from '../../domain/message.ts';
+import { MarkdownContent } from './markdown-content.tsx';
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
 
-/** A message: the user's on the right in brand blue, the assistant's on the left. */
+/**
+ * A message: the user's on the right in brand blue, as plain text; the
+ * assistant's on the left, rendered as Markdown.
+ */
 export function MessageBubble({ message }: { message: Message }) {
   const fromUser = message.role === 'user';
   return (
@@ -28,12 +32,17 @@ export function MessageBubble({ message }: { message: Message }) {
               }),
         }}
       >
-        <Typography
-          variant="body1"
-          sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
-        >
-          {message.content}
-        </Typography>
+        {fromUser ? (
+          // The user's text is shown as typed: no Markdown.
+          <Typography
+            variant="body1"
+            sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+          >
+            {message.content}
+          </Typography>
+        ) : (
+          <MarkdownContent>{message.content}</MarkdownContent>
+        )}
       </Box>
       <Typography
         component="time"
