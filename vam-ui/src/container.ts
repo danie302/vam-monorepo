@@ -2,6 +2,8 @@ import { createAuthModule } from './auth/auth.module.ts';
 import type { AuthRepository } from './auth/domain/auth.repository.ts';
 import { HttpAuthRepository } from './auth/infrastructure/http/http-auth.repository.ts';
 import { InMemoryAuthRepository } from './auth/infrastructure/in-memory/in-memory-auth.repository.ts';
+import { createChatModule } from './chat/chat.module.ts';
+import { PlaceholderAssistant } from './chat/infrastructure/placeholder/placeholder-assistant.ts';
 import { ApiClient } from './shared/infrastructure/http/api-client.ts';
 
 /** Composition root: the only place that picks adapters. */
@@ -30,6 +32,8 @@ function authRepository(): AuthRepository {
 
 export const container = {
   auth: createAuthModule(authRepository()),
+  // No LLM endpoint in the API yet: swap for an HTTP adapter once there is.
+  chat: createChatModule(new PlaceholderAssistant()),
 };
 
 export type Container = typeof container;

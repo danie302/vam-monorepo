@@ -16,7 +16,10 @@ full roadmap of planned additions.
   sign out / me) is implemented with `@nestjs/authentication`, `@nestjs/sequelize`
   and SQLite. No LLM chat yet.
 - `vam-ui/` — Next.js 16 + Material UI frontend. Sign-in / sign-up pages
-  against the backend's cookie session; home page is a placeholder for the chat.
+  against the backend's cookie session, and the chat UI at `/`. The chat
+  answers with `PlaceholderAssistant` (no LLM endpoint in the API yet):
+  replace it in `src/container.ts` with an HTTP adapter of the `Assistant`
+  port once the endpoint exists.
 
 ## Stack
 
