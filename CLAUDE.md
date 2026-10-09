@@ -31,19 +31,12 @@ full roadmap of planned additions.
 - Backend: NestJS
 - Database: SQLite via Sequelize (`sequelize-typescript` models)
 
-## Initial scope (first milestone)
+## Scope
 
-Per `readme.md`, the first version is intentionally small:
-
-- Basic chat UI
-- Send a message, get a response from an LLM
-- User authentication (sign up / log in)
-- No memory, tools, or other persistence yet
-
-Everything beyond this (conversation memory, tool/function calling, RAG,
-multi-step agents, etc.) is deliberately deferred — check `readme.md`'s
-roadmap before adding a feature to confirm it isn't intentionally
-out of scope for the current milestone.
+Features are added one at a time, following the roadmap in `readme.md`
+(done items are checked). Before adding a feature, check the roadmap to
+confirm it is the next step and not deliberately deferred (tool calling,
+RAG, user data memory, multi-step agents, etc. are still pending).
 
 ## Working in this repo
 
