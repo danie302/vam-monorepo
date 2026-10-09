@@ -34,6 +34,10 @@ export class ApiClient {
     return this.request<T>('POST', path, body);
   }
 
+  delete<T>(path: string): Promise<T> {
+    return this.request<T>('DELETE', path);
+  }
+
   /**
    * POSTs `body` and reads the answer as Server-Sent Events. An error status
    * throws before the first event; aborting `signal` stops the stream (the

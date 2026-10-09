@@ -13,6 +13,13 @@ function fakeClient(result: { events?: object[]; error?: unknown }) {
   return { client: { responses: { create } } as unknown as OpenAI, create };
 }
 
+const hi = [{ role: 'user' as const, content: 'Hi' }];
+const conversation = [
+  ...hi,
+  { role: 'assistant' as const, content: 'Hello!' },
+  { role: 'user' as const, content: 'Again' },
+];
+
 async function collect(stream: AsyncIterable<string>): Promise<string[]> {
   const chunks: string[] = [];
   for await (const chunk of stream) chunks.push(chunk);
@@ -27,7 +34,7 @@ describe('OpenAiLanguageModel', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('yields the text deltas and asks OpenAI not to store the response', async () => {
+  it('sends the instructions and the whole conversation, yields the deltas, and asks OpenAI not to store it', async () => {
     const { client, create } = fakeClient({
       events: [
         { type: 'response.created' },
@@ -39,12 +46,22 @@ describe('OpenAiLanguageModel', () => {
     const signal = new AbortController().signal;
 
     const chunks = await collect(
-      new OpenAiLanguageModel(client).stream({ model: 'm', message: 'Hi', signal }),
+      new OpenAiLanguageModel(client).stream({ model: 'm', instructions: 'Be kind.', messages: conversation, signal }),
     );
 
     expect(chunks).toEqual(['Hel', 'lo']);
     expect(create).toHaveBeenCalledWith(
-      { model: 'm', input: 'Hi', stream: true, store: false },
+      {
+        model: 'm',
+        instructions: 'Be kind.',
+        input: [
+          { role: 'user', content: 'Hi' },
+          { role: 'assistant', content: 'Hello!' },
+          { role: 'user', content: 'Again' },
+        ],
+        stream: true,
+        store: false,
+      },
       { signal },
     );
   });
@@ -58,7 +75,7 @@ describe('OpenAiLanguageModel', () => {
     });
 
     await expect(
-      collect(new OpenAiLanguageModel(client).stream({ model: 'm', message: 'Hi' })),
+      collect(new OpenAiLanguageModel(client).stream({ model: 'm', instructions: 'Be kind.', messages: hi })),
     ).rejects.toBeInstanceOf(LanguageModelUnavailableError);
   });
 
@@ -72,7 +89,7 @@ describe('OpenAiLanguageModel', () => {
     });
 
     await expect(
-      collect(new OpenAiLanguageModel(client).stream({ model: 'm', message: 'Hi' })),
+      collect(new OpenAiLanguageModel(client).stream({ model: 'm', instructions: 'Be kind.', messages: hi })),
     ).rejects.toThrow(message);
   });
 
@@ -84,7 +101,8 @@ describe('OpenAiLanguageModel', () => {
     const chunks = await collect(
       new OpenAiLanguageModel(client).stream({
         model: 'm',
-        message: 'Hi',
+        instructions: 'Be kind.',
+        messages: hi,
         signal: controller.signal,
       }),
     );

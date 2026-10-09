@@ -10,6 +10,13 @@ export const chatModels = (
   .map((model) => model.trim())
   .filter(Boolean);
 
+/**
+ * System instructions for the model, in `CHAT_INSTRUCTIONS`: they orient and
+ * limit what the assistant does. Missing or blank means the default ones
+ * (`DEFAULT_CHAT_INSTRUCTIONS`).
+ */
+export const chatInstructions = process.env.CHAT_INSTRUCTIONS;
+
 /** Required to talk to OpenAI; read when the chat module starts. */
 export function openAiApiKey(): string {
   const apiKey = process.env.OPENAI_API_KEY?.trim();

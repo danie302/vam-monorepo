@@ -21,3 +21,11 @@ export class AssistantUnavailableError extends Error {
     this.name = 'AssistantUnavailableError';
   }
 }
+
+/** Missing, deleted, or someone else's. */
+export class ConversationNotFoundError extends Error {
+  constructor() {
+    super('This conversation does not exist or was deleted');
+    this.name = 'ConversationNotFoundError';
+  }
+}

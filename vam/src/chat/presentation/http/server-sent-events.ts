@@ -5,8 +5,9 @@ import { LanguageModelUnavailableError } from '../../application/language-model-
 const logger = new Logger('ChatStream');
 
 /**
- * The events of `POST /chat/messages`:
+ * The events of `POST /conversations/:id/messages`:
  *
+ * - the `opening` events first (e.g. `conversation`, with its new title).
  * - `delta` `{ text }`: the next piece of the answer.
  * - `done` `{}`: the answer is complete.
  * - `error` `{ message }`: the answer stopped; `message` is safe to show.
@@ -16,12 +17,15 @@ const logger = new Logger('ChatStream');
  */
 export function toServerSentEvents(
   chunks: AsyncIterable<string>,
+  opening: MessageEvent[] = [],
 ): Observable<MessageEvent> {
   return new Observable<MessageEvent>((subscriber) => {
     void (async () => {
+      for (const event of opening) subscriber.next(event);
       try {
         for await (const text of chunks) {
           // The client left: the use case's signal stops the model too.
+          // Returning ends the stream, which saves what arrived.
           if (subscriber.closed) return;
           subscriber.next({ type: 'delta', data: { text } });
         }

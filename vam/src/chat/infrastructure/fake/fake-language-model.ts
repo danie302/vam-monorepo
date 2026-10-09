@@ -5,8 +5,8 @@ import {
 } from '../../application/ports/language-model.ts';
 
 /**
- * `LanguageModel` for tests: answers `chunks` (or echoes the message word
- * by word), remembers the requests, and fails after `failAfter` chunks.
+ * `LanguageModel` for tests: answers `chunks` (or echoes the last message
+ * word by word), remembers the requests, and fails after `failAfter` chunks.
  */
 export class FakeLanguageModel extends LanguageModel {
   requests: LanguageModelRequest[] = [];
@@ -15,7 +15,7 @@ export class FakeLanguageModel extends LanguageModel {
 
   async *stream(request: LanguageModelRequest): AsyncIterable<string> {
     this.requests.push(request);
-    const chunks = this.chunks ?? request.message.split(/(?<= )/);
+    const chunks = this.chunks ?? (request.messages.at(-1)?.content ?? '').split(/(?<= )/);
     for (const [i, chunk] of chunks.entries()) {
       if (i === this.failAfter) throw new LanguageModelUnavailableError();
       yield chunk;

@@ -2,9 +2,10 @@ import { createAuthModule } from './auth/auth.module.ts';
 import type { AuthRepository } from './auth/domain/auth.repository.ts';
 import { HttpAuthRepository } from './auth/infrastructure/http/http-auth.repository.ts';
 import { InMemoryAuthRepository } from './auth/infrastructure/in-memory/in-memory-auth.repository.ts';
-import type { Assistant } from './chat/application/ports/assistant.ts';
-import { createChatModule } from './chat/chat.module.ts';
+import { createChatModule, type ChatUseCases } from './chat/chat.module.ts';
 import { HttpAssistant } from './chat/infrastructure/http/http-assistant.ts';
+import { HttpConversationRepository } from './chat/infrastructure/http/http-conversation.repository.ts';
+import { InMemoryConversationRepository } from './chat/infrastructure/in-memory/in-memory-conversation.repository.ts';
 import { PlaceholderAssistant } from './chat/infrastructure/placeholder/placeholder-assistant.ts';
 import { ApiClient } from './shared/infrastructure/http/api-client.ts';
 
@@ -37,15 +38,18 @@ function authRepository(): AuthRepository {
 
 /**
  * `NEXT_PUBLIC_CHAT_ADAPTER`: `http` (default) streams answers from the
- * API's LLM, `placeholder` streams a canned answer (no API or OpenAI key).
+ * API's LLM and keeps conversations there; `placeholder` streams a canned
+ * answer and keeps conversations in the tab (no API or OpenAI key).
  */
-function assistant(): Assistant {
+function chat(): ChatUseCases {
   const adapter = process.env.NEXT_PUBLIC_CHAT_ADAPTER ?? 'http';
   switch (adapter) {
     case 'http':
-      return new HttpAssistant(api);
-    case 'placeholder':
-      return new PlaceholderAssistant();
+      return createChatModule(new HttpConversationRepository(api), new HttpAssistant(api));
+    case 'placeholder': {
+      const conversations = new InMemoryConversationRepository();
+      return createChatModule(conversations, new PlaceholderAssistant(conversations));
+    }
     default:
       throw new Error(
         `Unknown NEXT_PUBLIC_CHAT_ADAPTER "${adapter}": use "http" or "placeholder"`,
@@ -55,7 +59,7 @@ function assistant(): Assistant {
 
 export const container = {
   auth: createAuthModule(authRepository()),
-  chat: createChatModule(assistant()),
+  chat: chat(),
 };
 
 export type Container = typeof container;

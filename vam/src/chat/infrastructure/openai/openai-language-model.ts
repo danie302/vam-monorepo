@@ -18,11 +18,24 @@ export class OpenAiLanguageModel extends LanguageModel {
     super();
   }
 
-  async *stream({ model, message, signal }: LanguageModelRequest): AsyncIterable<string> {
+  async *stream({
+    model,
+    instructions,
+    messages,
+    signal,
+  }: LanguageModelRequest): AsyncIterable<string> {
     try {
       const events = await this.client.responses.create(
-        // store: false — OpenAI keeps responses for 30 days by default.
-        { model, input: message, stream: true, store: false },
+        {
+          model,
+          // System instructions: above the messages, and not part of the history.
+          instructions,
+          // The whole conversation every time: the API keeps no state for us
+          // (store: false — otherwise OpenAI keeps responses for 30 days).
+          input: messages.map(({ role, content }) => ({ role, content })),
+          stream: true,
+          store: false,
+        },
         { signal },
       );
       for await (const event of events) {

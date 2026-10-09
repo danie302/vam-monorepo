@@ -14,12 +14,16 @@ full roadmap of planned additions.
 
 - `vam/` — NestJS backend. Cookie-session authentication (sign up / sign in /
   sign out / me) with `@nestjs/authentication`, `@nestjs/sequelize` and
-  SQLite, and an LLM chat on OpenAI streamed as Server-Sent Events
-  (`POST /chat/messages`, `GET /chat/models`). One message in, one answer
-  out: no conversation memory yet.
+  SQLite, and an LLM chat on OpenAI streamed as Server-Sent Events. Each
+  user has conversations stored in SQLite (`conversations`,
+  `chat_messages`): `GET/POST /conversations`, `GET/DELETE
+  /conversations/:id`, `POST /conversations/:id/messages` (SSE), and
+  `GET /chat/models`. Each new message sends the conversation's history to
+  the model (its most recent ~32k characters: `recentHistory`).
 - `vam-ui/` — Next.js 16 + Material UI frontend. Sign-in / sign-up pages
-  against the backend's cookie session, and the chat UI at `/`: streamed
-  answers, stop button, model picker.
+  against the backend's cookie session, and the chat: `/` is a new chat,
+  `/c/[id]` a conversation; a sidebar lists, opens and deletes them.
+  Streamed answers, stop button, model picker.
 
 ## Stack
 
@@ -99,11 +103,28 @@ Backend notes:
 - Chat: `OPENAI_API_KEY` is required — the app fails at startup without it.
   `CHAT_MODELS` (comma separated, first is the default) is the allowlist for
   the `model` field of `POST /chat/messages`; anything else is a 400.
+  `CHAT_INSTRUCTIONS` (optional, multi-line in double quotes) are the
+  model's system instructions, sent as the Responses API `instructions`
+  (not part of the history); missing or blank uses
+  `DEFAULT_CHAT_INSTRUCTIONS` (`src/chat/domain/chat-instructions.ts`).
   `OPENAI_BASE_URL` (read by the SDK) points it at another server, e.g. a
   local mock. Responses API with `store: false`.
-- SSE: `POST /chat/messages` uses `@Sse(path, { method: POST })` and emits
-  `delta {text}`, then `done {}` or `error {message}` (safe to show; details
-  are logged). Errors before the stream starts (validation, unknown model)
+- Conversations: every query is scoped to the signed-in user; another
+  user's conversation is a 404, like a missing one. The first message titles
+  a conversation. `SendMessageUseCase` saves the user's message before
+  streaming and the answer when the stream ends, however it ends (complete,
+  stopped, failed: what arrived is kept, and is history from then on). The
+  model gets the history read back after saving the new message, so that
+  message is always last. Every `ConversationRepository`
+  must pass `conversation-repository.contract-spec.ts`.
+- SSE: `POST /conversations/:id/messages` uses `@Sse(path, { method: POST })`
+  and emits `conversation {id,title,…}` first, then `delta {text}`, then
+  `done {}` or `error {message}` (safe to show; details are logged).
+  Gotcha: an async `@Sse()` handler that fails after a database round trip
+  answers 200 with an SSE `error` event, not the filter's 4xx (the global
+  `AuthenticationScopeInterceptor` defers the handler and Nest commits SSE
+  headers on the next macrotask). Checks that must be a 4xx go in a guard
+  (`ConversationAccessGuard`) or before the handler's first `await`. Errors before the stream starts (validation, unknown model)
   are normal HTTP errors. `@SseSignal()` aborts the OpenAI request when the
   client disconnects. E2E tests replace `LanguageModel` with
   `FakeLanguageModel`.
@@ -119,8 +140,8 @@ Frontend commands (run in `vam-ui/`):
 - `npm run lint` — eslint; `npm test` — vitest (`src/**/*.spec.ts`)
 - `NEXT_PUBLIC_API_URL` — API base URL (default `http://localhost:3000`,
   see `.env.example`)
-- `NEXT_PUBLIC_CHAT_ADAPTER` — `http` (default, streams from the API) or
-  `placeholder` (canned streamed answer; no API or OpenAI key needed)
+- `NEXT_PUBLIC_CHAT_ADAPTER` — `http` (default: the API) or `placeholder`
+  (canned streamed answer, conversations in the tab; no API or OpenAI key)
 - `NEXT_PUBLIC_AUTH_ADAPTER` — `http` (default, the API) or `memory` (accounts
   in the browser tab, lost on reload; no backend needed). Read in
   `src/container.ts`; `NEXT_PUBLIC_*` vars are inlined at build time, so
@@ -142,6 +163,11 @@ src/app/           Next routes only: (auth)/ guest pages, (app)/ signed-in pages
 
 - Dependency rule: `domain/` and `application/` never import `react`,
   `next` or `@mui/*`.
+- Chat state lives in `ChatProvider` (in the `(app)` layout, above the
+  pages): the conversation list and one thread per conversation, so an
+  answer keeps streaming while the user switches conversations. A new chat
+  at `/` starts its conversation on the first message, then moves to
+  `/c/[id]`.
 - Streaming: `ApiClient.stream()` POSTs and reads the body with
   `readServerSentEvents` (`EventSource` only does GET).
 - The browser calls the API directly with `credentials: 'include'`; route

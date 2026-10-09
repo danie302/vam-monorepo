@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiClient, ApiError } from '../../../shared/infrastructure/http/api-client.ts';
-import { AssistantUnavailableError } from '../../domain/chat.errors.ts';
+import { ApiClient } from '../../../shared/infrastructure/http/api-client.ts';
+import type { AssistantEvent } from '../../application/ports/assistant.ts';
+import { AssistantUnavailableError, ConversationNotFoundError } from '../../domain/chat.errors.ts';
 import { HttpAssistant } from './http-assistant.ts';
 
-/** Makes `fetch` answer with this event-stream body (or JSON error). */
+/** Makes `fetch` answer with this event-stream body (or a JSON error). */
 function respondWith(body: string, status = 200) {
   const fetch = vi.fn(async () =>
     new Response(body, {
@@ -15,27 +16,42 @@ function respondWith(body: string, status = 200) {
   return fetch;
 }
 
-async function collect(stream: AsyncIterable<string>): Promise<string> {
-  let text = '';
-  for await (const chunk of stream) text += chunk;
-  return text;
+async function collect(events: AsyncIterable<AssistantEvent>): Promise<AssistantEvent[]> {
+  const all: AssistantEvent[] = [];
+  for await (const event of events) all.push(event);
+  return all;
 }
 
 const assistant = new HttpAssistant(new ApiClient('http://api.test'));
+const conversation =
+  '{"id":"c1","title":"Hi","createdAt":"2026-10-09T10:00:00.000Z","updatedAt":"2026-10-09T10:05:00.000Z"}';
 
 describe('HttpAssistant', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('posts the message with credentials and yields the deltas', async () => {
+  it('posts to the conversation and yields the conversation, then the deltas', async () => {
     const fetch = respondWith(
-      'event: delta\ndata: {"text":"Hel"}\n\nevent: delta\ndata: {"text":"lo"}\n\nevent: done\ndata: {}\n\n',
+      `event: conversation\ndata: ${conversation}\n\n` +
+        'event: delta\ndata: {"text":"Hel"}\n\nevent: delta\ndata: {"text":"lo"}\n\nevent: done\ndata: {}\n\n',
     );
 
-    const text = await collect(assistant.stream({ message: 'Hi', model: 'm' }));
+    const events = await collect(assistant.stream({ conversationId: 'c1', message: 'Hi', model: 'm' }));
 
-    expect(text).toBe('Hello');
+    expect(events).toEqual([
+      {
+        type: 'conversation',
+        conversation: {
+          id: 'c1',
+          title: 'Hi',
+          createdAt: new Date('2026-10-09T10:00:00.000Z'),
+          updatedAt: new Date('2026-10-09T10:05:00.000Z'),
+        },
+      },
+      { type: 'delta', text: 'Hel' },
+      { type: 'delta', text: 'lo' },
+    ]);
     expect(fetch).toHaveBeenCalledWith(
-      'http://api.test/chat/messages',
+      'http://api.test/conversations/c1/messages',
       expect.objectContaining({
         method: 'POST',
         credentials: 'include',
@@ -47,24 +63,32 @@ describe('HttpAssistant', () => {
   it('throws the message of an error event', async () => {
     respondWith('event: delta\ndata: {"text":"Hel"}\n\nevent: error\ndata: {"message":"Busy"}\n\n');
 
-    await expect(collect(assistant.stream({ message: 'Hi' }))).rejects.toEqual(
+    await expect(collect(assistant.stream({ conversationId: 'c1', message: 'Hi' }))).rejects.toEqual(
       new AssistantUnavailableError('Busy'),
+    );
+  });
+
+  it("reads Nest's plain-text error events too", async () => {
+    respondWith('event: error\nid: 1\ndata: Conversation not found\n\n');
+
+    await expect(collect(assistant.stream({ conversationId: 'c1', message: 'Hi' }))).rejects.toEqual(
+      new AssistantUnavailableError('Conversation not found'),
     );
   });
 
   it('treats a stream that ends without done as cut off', async () => {
     respondWith('event: delta\ndata: {"text":"Hel"}\n\n');
 
-    await expect(collect(assistant.stream({ message: 'Hi' }))).rejects.toThrow(
+    await expect(collect(assistant.stream({ conversationId: 'c1', message: 'Hi' }))).rejects.toThrow(
       'The answer was cut off',
     );
   });
 
-  it('throws an ApiError with the API message on a 400', async () => {
-    respondWith(JSON.stringify({ message: 'Model "x" is not available' }), 400);
+  it('turns a 404 into ConversationNotFoundError', async () => {
+    respondWith(JSON.stringify({ message: 'Conversation not found' }), 404);
 
-    await expect(collect(assistant.stream({ message: 'Hi', model: 'x' }))).rejects.toEqual(
-      new ApiError(400, 'Model "x" is not available'),
-    );
+    await expect(
+      collect(assistant.stream({ conversationId: 'gone', message: 'Hi' })),
+    ).rejects.toBeInstanceOf(ConversationNotFoundError);
   });
 });
